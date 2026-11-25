@@ -7,13 +7,6 @@ interface Star {
   y: number;
   r: number;
   a: number;
-  hueOffset: number;
-}
-
-interface Ray {
-  t: number;
-  offset: number;
-  width: number;
 }
 
 export default function HomePage() {
@@ -34,32 +27,6 @@ export default function HomePage() {
     let started = false;
     let step = 0;
 
-    const rays: Ray[] = [];
-    const phase1 = 440;
-    const phase2 = 240;
-
-    for (let i = 0; i < phase1; i++) {
-      const p = i / phase1;
-      const t =
-        (Math.PI * 1.95 - p * Math.PI * 1.9 + Math.PI * 2) % (Math.PI * 2);
-      rays.push({
-        t,
-        offset: p * 110,
-        width: 1.35,
-      });
-    }
-
-    for (let i = 0; i < phase2; i++) {
-      const p2 = i / phase2;
-      const t = Math.PI * 1.85 - p2 * Math.PI * 0.85;
-      const wave = Math.sin(p2 * 30);
-      rays.push({
-        t,
-        offset: 180 + wave * 35,
-        width: 1.45,
-      });
-    }
-
     const initStars = () => {
       stars = [];
       const total = Math.min(160, Math.floor((width * height) / 5500));
@@ -69,8 +36,18 @@ export default function HomePage() {
           y: Math.random() * height,
           r: Math.random() * 1.4 + 0.35,
           a: Math.random() * 0.7 + 0.2,
-          hueOffset: (i * 37) % 360,
         });
+      }
+    };
+
+    const drawBg = () => {
+      ctx.fillStyle = "#06060b";
+      ctx.fillRect(0, 0, width, height);
+      for (const s of stars) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(215, 232, 255, ${s.a})`;
+        ctx.fill();
       }
     };
 
@@ -82,12 +59,13 @@ export default function HomePage() {
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Tam ekran uyumlu büyük ve ortalı ölçek
-      scale = Math.min(width, height) / 36;
+      // Büyük ve tam ekran kalp ölçeği
+      scale = Math.min(width, height) / 34;
       initStars();
+      drawBg();
     };
 
-    const getHeartPoint = (t: number, cx: number, cy: number) => {
+    const getHeartPoint = (t: number) => {
       const x = 16 * Math.pow(Math.sin(t), 3);
       const y = -(
         13 * Math.cos(t) -
@@ -96,55 +74,51 @@ export default function HomePage() {
         Math.cos(4 * t)
       );
 
+      const cx = width / 2;
+      const cy = height / 2 + scale * 1.2;
+
       return {
+        cx,
+        cy,
         x: cx + x * scale,
         y: cy + y * scale,
       };
     };
 
-    const renderFrame = (timeMs: number) => {
-      const rgbShift = ((timeMs * 0.09) % 360 + 360) % 360;
+    // Tek bir tam tur = 440 adım (eski hızla birebir aynı)
+    const stepsPerLap = 440;
 
-      ctx.fillStyle = "#06060b";
-      ctx.fillRect(0, 0, width, height);
-
-      for (const s of stars) {
-        const hue = (rgbShift + s.hueOffset) % 360;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${hue}, 95%, 80%, ${s.a})`;
-        ctx.fill();
-      }
-
+    const tick = () => {
       if (started) {
-        // Eski hızda adım adım çizim (1 adım / frame)
-        if (step < rays.length) {
-          step++;
-        }
+        const lap = Math.floor(step / stepsPerLap);
+        const p = (step % stepsPerLap) / stepsPerLap;
 
-        const cx = width / 2;
-        const cy = height / 2 + scale * 1.2;
+        // Çubuk aynı eski yönde ve eski hızda sonsuz tur atar
+        const t =
+          (Math.PI * 1.95 - p * Math.PI * 1.95 + Math.PI * 2) % (Math.PI * 2);
+        const pt = getHeartPoint(t);
 
-        for (let i = 0; i < step; i++) {
-          const ray = rays[i];
-          const pt = getHeartPoint(ray.t, cx, cy);
-          const hue = (rgbShift + ray.offset) % 360;
+        // 1. turda mavi -> mor -> pembe, sonraki turlarda sarı -> kırmızı -> yeşil -> turkuaz -> sonsuz
+        const baseHue = 222 + lap * 135;
+        const hue = (baseHue + p * 110) % 360;
+        const light = 56 + Math.sin(p * Math.PI) * 10;
 
-          ctx.strokeStyle = `hsla(${hue}, 100%, 60%, 0.82)`;
-          ctx.lineWidth = ray.width;
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(pt.x, pt.y);
-          ctx.stroke();
-        }
+        ctx.strokeStyle = `hsla(${hue}, 95%, ${light}%, 0.8)`;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(pt.cx, pt.cy);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+
+        step++;
       }
 
-      animId = requestAnimationFrame(renderFrame);
+      animId = requestAnimationFrame(tick);
     };
 
     resize();
     window.addEventListener("resize", resize);
-    animId = requestAnimationFrame(renderFrame);
+    animId = requestAnimationFrame(tick);
 
     let c = 3;
     setCount(3);
