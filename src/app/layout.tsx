@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Senin İçin",
-  description: "Mobil uyumlu TypeScript & React kalp animasyonu",
+  title: "Animasyon",
+  description: "Mobil uyumlu TypeScript ve React animasyonu",
 };
 
 export const viewport: Viewport = {
@@ -20,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body className="w-screen h-screen overflow-hidden bg-[#07070c] select-none">
+      <body className="w-screen h-[100dvh] overflow-hidden bg-[#06060b] select-none">
         {children}
       </body>
     </html>
