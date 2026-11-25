@@ -7,15 +7,13 @@ interface Star {
   y: number;
   r: number;
   a: number;
-  phase: number;
   hueOffset: number;
 }
 
 interface Ray {
   t: number;
-  rayIndex: number;
+  offset: number;
   width: number;
-  layer: 1 | 2;
 }
 
 export default function HomePage() {
@@ -28,63 +26,70 @@ export default function HomePage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const SCENE_W = 1280;
-    const SCENE_H = 720;
-
-    let viewW = 0;
-    let viewH = 0;
+    let width = 0;
+    let height = 0;
+    let scale = 1;
+    let stars: Star[] = [];
     let animId = 0;
     let started = false;
-    let totalDrawn = 0;
+    let step = 0;
 
     const rays: Ray[] = [];
-    const phase1Count = 440;
-    const phase2Count = 240;
+    const phase1 = 440;
+    const phase2 = 240;
 
-    for (let i = 0; i < phase1Count; i++) {
-      const p = i / phase1Count;
+    for (let i = 0; i < phase1; i++) {
+      const p = i / phase1;
       const t =
         (Math.PI * 1.95 - p * Math.PI * 1.9 + Math.PI * 2) % (Math.PI * 2);
       rays.push({
         t,
-        rayIndex: i,
+        offset: p * 110,
         width: 1.35,
-        layer: 1,
       });
     }
 
-    for (let i = 0; i < phase2Count; i++) {
-      const p2 = i / phase2Count;
+    for (let i = 0; i < phase2; i++) {
+      const p2 = i / phase2;
       const t = Math.PI * 1.85 - p2 * Math.PI * 0.85;
+      const wave = Math.sin(p2 * 30);
       rays.push({
         t,
-        rayIndex: phase1Count + i,
+        offset: 180 + wave * 35,
         width: 1.45,
-        layer: 2,
       });
     }
 
-    const stars: Star[] = Array.from({ length: 180 }, (_, idx) => ({
-      x: Math.random() * SCENE_W,
-      y: Math.random() * SCENE_H,
-      r: Math.random() * 1.5 + 0.35,
-      a: Math.random() * 0.75 + 0.25,
-      phase: Math.random() * Math.PI * 2,
-      hueOffset: (idx * 29) % 360,
-    }));
+    const initStars = () => {
+      stars = [];
+      const total = Math.min(160, Math.floor((width * height) / 5500));
+      for (let i = 0; i < total; i++) {
+        stars.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          r: Math.random() * 1.4 + 0.35,
+          a: Math.random() * 0.7 + 0.2,
+          hueOffset: (i * 37) % 360,
+        });
+      }
+    };
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      viewW = window.innerWidth;
-      viewH = window.innerHeight;
-      canvas.width = Math.floor(viewW * dpr);
-      canvas.height = Math.floor(viewH * dpr);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Tam ekran uyumlu büyük ve ortalı ölçek
+      scale = Math.min(width, height) / 36;
+      initStars();
     };
 
-    const getHeartPoint = (t: number, scale: number, cx: number, cy: number) => {
-      const hx = 16 * Math.pow(Math.sin(t), 3);
-      const hy = -(
+    const getHeartPoint = (t: number, cx: number, cy: number) => {
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const y = -(
         13 * Math.cos(t) -
         5 * Math.cos(2 * t) -
         2 * Math.cos(3 * t) -
@@ -92,59 +97,40 @@ export default function HomePage() {
       );
 
       return {
-        x: cx + hx * scale,
-        y: cy + hy * scale,
+        x: cx + x * scale,
+        y: cy + y * scale,
       };
     };
 
     const renderFrame = (timeMs: number) => {
-      const tSec = timeMs * 0.001;
-
-      if (started && totalDrawn < rays.length) {
-        totalDrawn = Math.min(rays.length, totalDrawn + 8);
-      }
-
-      // Sınırsız, sürekli dönen RGB açısı (0..360)
-      const rgbAngle = ((tSec * 150) % 360 + 360) % 360;
+      const rgbShift = ((timeMs * 0.09) % 360 + 360) % 360;
 
       ctx.fillStyle = "#06060b";
-      ctx.fillRect(0, 0, viewW, viewH);
+      ctx.fillRect(0, 0, width, height);
 
-      const fitScale = Math.min(viewW / SCENE_W, viewH / SCENE_H);
-      const offsetX = (viewW - SCENE_W * fitScale) / 2;
-      const offsetY = (viewH - SCENE_H * fitScale) / 2;
-
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(fitScale, fitScale);
-
-      // RGB parıltılı yıldızlar
       for (const s of stars) {
-        const twinkle = 0.7 + 0.3 * Math.sin(tSec * 3 + s.phase);
-        const starHue = (rgbAngle + s.hueOffset) % 360;
+        const hue = (rgbShift + s.hueOffset) % 360;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${starHue}, 95%, 78%, ${s.a * twinkle})`;
+        ctx.fillStyle = `hsla(${hue}, 95%, 80%, ${s.a})`;
         ctx.fill();
       }
 
       if (started) {
-        const heartScale = 17.5;
-        const cx = SCENE_W / 2;
-        const cy = SCENE_H / 2 + 22;
+        // Eski hızda adım adım çizim (1 adım / frame)
+        if (step < rays.length) {
+          step++;
+        }
 
-        for (let i = 0; i < totalDrawn; i++) {
+        const cx = width / 2;
+        const cy = height / 2 + scale * 1.2;
+
+        for (let i = 0; i < step; i++) {
           const ray = rays[i];
-          const pt = getHeartPoint(ray.t, heartScale, cx, cy);
+          const pt = getHeartPoint(ray.t, cx, cy);
+          const hue = (rgbShift + ray.offset) % 360;
 
-          // Her çizgi ve zaman için sınırsız tam RGB döngüsü
-          const hue =
-            (rgbAngle + ray.rayIndex * 1.45 + Math.sin(tSec * 2 + i * 0.05) * 45) %
-            360;
-          const normalizedHue = ((hue % 360) + 360) % 360;
-          const lightness = ray.layer === 2 ? 64 : 58;
-
-          ctx.strokeStyle = `hsla(${normalizedHue}, 100%, ${lightness}%, 0.82)`;
+          ctx.strokeStyle = `hsla(${hue}, 100%, 60%, 0.82)`;
           ctx.lineWidth = ray.width;
           ctx.beginPath();
           ctx.moveTo(cx, cy);
@@ -153,7 +139,6 @@ export default function HomePage() {
         }
       }
 
-      ctx.restore();
       animId = requestAnimationFrame(renderFrame);
     };
 
