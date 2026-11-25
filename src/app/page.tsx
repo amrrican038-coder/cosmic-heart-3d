@@ -8,11 +8,12 @@ interface Star {
   r: number;
   a: number;
   phase: number;
+  hueOffset: number;
 }
 
 interface Ray {
   t: number;
-  offset: number;
+  rayIndex: number;
   width: number;
   layer: 1 | 2;
 }
@@ -27,7 +28,6 @@ export default function HomePage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Masaüstü (16:9 geniş) sanal sahne boyutu
     const SCENE_W = 1280;
     const SCENE_H = 720;
 
@@ -36,7 +36,6 @@ export default function HomePage() {
     let animId = 0;
     let started = false;
     let totalDrawn = 0;
-    let rgbShift = 0;
 
     const rays: Ray[] = [];
     const phase1Count = 440;
@@ -48,8 +47,8 @@ export default function HomePage() {
         (Math.PI * 1.95 - p * Math.PI * 1.9 + Math.PI * 2) % (Math.PI * 2);
       rays.push({
         t,
-        offset: p * 95,
-        width: 1.3,
+        rayIndex: i,
+        width: 1.35,
         layer: 1,
       });
     }
@@ -57,21 +56,21 @@ export default function HomePage() {
     for (let i = 0; i < phase2Count; i++) {
       const p2 = i / phase2Count;
       const t = Math.PI * 1.85 - p2 * Math.PI * 0.85;
-      const wave = Math.sin(p2 * 30);
       rays.push({
         t,
-        offset: 185 + wave * 28,
-        width: 1.35,
+        rayIndex: phase1Count + i,
+        width: 1.45,
         layer: 2,
       });
     }
 
-    const stars: Star[] = Array.from({ length: 160 }, () => ({
+    const stars: Star[] = Array.from({ length: 180 }, (_, idx) => ({
       x: Math.random() * SCENE_W,
       y: Math.random() * SCENE_H,
-      r: Math.random() * 1.4 + 0.35,
-      a: Math.random() * 0.75 + 0.2,
+      r: Math.random() * 1.5 + 0.35,
+      a: Math.random() * 0.75 + 0.25,
       phase: Math.random() * Math.PI * 2,
+      hueOffset: (idx * 29) % 360,
     }));
 
     const resize = () => {
@@ -102,18 +101,15 @@ export default function HomePage() {
       const tSec = timeMs * 0.001;
 
       if (started && totalDrawn < rays.length) {
-        totalDrawn = Math.min(rays.length, totalDrawn + 6);
+        totalDrawn = Math.min(rays.length, totalDrawn + 8);
       }
 
-      // Sürekli RGB renk kayması
-      if (started) {
-        rgbShift = (tSec * 75) % 360;
-      }
+      // Sınırsız, sürekli dönen RGB açısı (0..360)
+      const rgbAngle = ((tSec * 150) % 360 + 360) % 360;
 
       ctx.fillStyle = "#06060b";
       ctx.fillRect(0, 0, viewW, viewH);
 
-      // Geniş (masaüstü) sahneyi ekrana tam sığdırarak ortala
       const fitScale = Math.min(viewW / SCENE_W, viewH / SCENE_H);
       const offsetX = (viewW - SCENE_W * fitScale) / 2;
       const offsetY = (viewH - SCENE_H * fitScale) / 2;
@@ -122,12 +118,13 @@ export default function HomePage() {
       ctx.translate(offsetX, offsetY);
       ctx.scale(fitScale, fitScale);
 
-      // Yıldızlar
+      // RGB parıltılı yıldızlar
       for (const s of stars) {
-        const twinkle = 0.75 + 0.25 * Math.sin(tSec * 2.2 + s.phase);
+        const twinkle = 0.7 + 0.3 * Math.sin(tSec * 3 + s.phase);
+        const starHue = (rgbAngle + s.hueOffset) % 360;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(220, 236, 255, ${s.a * twinkle})`;
+        ctx.fillStyle = `hsla(${starHue}, 95%, 78%, ${s.a * twinkle})`;
         ctx.fill();
       }
 
@@ -139,9 +136,15 @@ export default function HomePage() {
         for (let i = 0; i < totalDrawn; i++) {
           const ray = rays[i];
           const pt = getHeartPoint(ray.t, heartScale, cx, cy);
-          const hue = (rgbShift + ray.offset) % 360;
 
-          ctx.strokeStyle = `hsla(${hue}, 95%, 60%, 0.78)`;
+          // Her çizgi ve zaman için sınırsız tam RGB döngüsü
+          const hue =
+            (rgbAngle + ray.rayIndex * 1.45 + Math.sin(tSec * 2 + i * 0.05) * 45) %
+            360;
+          const normalizedHue = ((hue % 360) + 360) % 360;
+          const lightness = ray.layer === 2 ? 64 : 58;
+
+          ctx.strokeStyle = `hsla(${normalizedHue}, 100%, ${lightness}%, 0.82)`;
           ctx.lineWidth = ray.width;
           ctx.beginPath();
           ctx.moveTo(cx, cy);
