@@ -1,5 +1,5 @@
 {
-  "name": "naz-heart-ts",
+  "name": "heart-ts",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -13,11 +13,11 @@
     "react-dom": "19.2.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4",
     "typescript": "^5"
   }
 }
