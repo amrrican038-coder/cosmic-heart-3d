@@ -9,15 +9,9 @@ interface Star {
   a: number;
 }
 
-interface Point {
-  x: number;
-  y: number;
-}
-
 export default function HomePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [count, setCount] = useState<number>(3);
-  const [showMessage, setShowMessage] = useState<boolean>(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,29 +24,29 @@ export default function HomePage() {
     let scale = 1;
     let stars: Star[] = [];
     let animId = 0;
-    let countdownTimer: ReturnType<typeof setInterval> | null = null;
+    let started = false;
+    let step = 0;
 
-    const createStars = () => {
+    const initStars = () => {
       stars = [];
-      const starCount = Math.min(180, Math.floor((width * height) / 4500));
-      for (let i = 0; i < starCount; i++) {
+      const total = Math.min(160, Math.floor((width * height) / 5500));
+      for (let i = 0; i < total; i++) {
         stars.push({
           x: Math.random() * width,
           y: Math.random() * height,
-          r: Math.random() * 1.5 + 0.4,
-          a: Math.random() * 0.75 + 0.2,
+          r: Math.random() * 1.4 + 0.35,
+          a: Math.random() * 0.7 + 0.2,
         });
       }
     };
 
-    const drawBackground = () => {
-      ctx.fillStyle = "#07070c";
+    const drawBg = () => {
+      ctx.fillStyle = "#06060b";
       ctx.fillRect(0, 0, width, height);
-
       for (const s of stars) {
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${s.a})`;
+        ctx.fillStyle = `rgba(215, 232, 255, ${s.a})`;
         ctx.fill();
       }
     };
@@ -65,12 +59,14 @@ export default function HomePage() {
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      scale = Math.min(width, height) / 36;
-      createStars();
-      drawBackground();
+      // Telefon ekranına tam oturacak ölçek ve merkez
+      scale = Math.min(width, height) / 38;
+      initStars();
+      drawBg();
     };
 
-    const getHeartPoint = (t: number): Point => {
+    // Kalp koordinatı: t = 0 (tepe), t = PI/2 (sağ), t = PI (alt uç), t = 3*PI/2 (sol)
+    const getHeartPoint = (t: number) => {
       const x = 16 * Math.pow(Math.sin(t), 3);
       const y = -(
         13 * Math.cos(t) -
@@ -79,103 +75,98 @@ export default function HomePage() {
         Math.cos(4 * t)
       );
 
+      const cx = width / 2;
+      const cy = height / 2 + scale * 1.2;
+
       return {
-        x: width / 2 + x * scale,
-        y: height / 2 - 12 + y * scale,
+        cx,
+        cy,
+        x: cx + x * scale,
+        y: cy + y * scale,
       };
     };
 
-    const startAnimation = () => {
-      let step = 0;
-      const phase1 = 360;
-      const phase2 = 260;
+    const stepAnimation = () => {
+      const phase1 = 440; // 1. katman: Mavi -> Mor -> Pembe
+      const phase2 = 240; // 2. katman: Turkuaz / Açık Mavi / Beyaz
 
-      const frame = () => {
-        if (step < phase1) {
-          const p = step / phase1;
-          const t = -p * Math.PI * 2;
-          const pt = getHeartPoint(t);
-          const hue = 225 + p * 90;
+      if (step < phase1) {
+        const p = step / phase1;
+        // Üstten sola (1.95*PI) -> alt uç (PI) -> sağa (0.05*PI)
+        const t =
+          (Math.PI * 1.95 - p * Math.PI * 1.9 + Math.PI * 2) % (Math.PI * 2);
+        const pt = getHeartPoint(t);
 
-          ctx.strokeStyle = `hsla(${hue}, 92%, 62%, 0.85)`;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(width / 2, height / 2 - 12);
-          ctx.lineTo(pt.x, pt.y);
-          ctx.stroke();
+        const hue = 222 + p * 92;
+        const light = 54 + Math.sin(p * Math.PI) * 10;
 
-          step++;
-          animId = requestAnimationFrame(frame);
-        } else if (step < phase1 + phase2) {
-          const p = (step - phase1) / phase2;
-          const t = -p * Math.PI * 2;
-          const pt = getHeartPoint(t);
-          const wave = Math.sin(p * 32);
-          const hue = 192 + wave * 24;
-          const light = 55 + Math.cos(p * 24) * 32;
+        ctx.strokeStyle = `hsla(${hue}, 92%, ${light}%, 0.78)`;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(pt.cx, pt.cy);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
 
-          ctx.strokeStyle = `hsla(${hue}, 95%, ${light}%, 0.9)`;
-          ctx.lineWidth = 1.7;
-          ctx.beginPath();
-          ctx.moveTo(width / 2, height / 2 - 12);
-          ctx.lineTo(pt.x, pt.y);
-          ctx.stroke();
+        step++;
+      } else if (step < phase1 + phase2) {
+        const p2 = (step - phase1) / phase2;
+        // Sol lobdan aşağı doğru turkuaz-beyaz çizgiler
+        const t = Math.PI * 1.85 - p2 * Math.PI * 0.85;
+        const pt = getHeartPoint(t);
 
-          step++;
-          animId = requestAnimationFrame(frame);
-        } else {
-          setShowMessage(true);
-        }
-      };
+        const wave = Math.sin(p2 * 30);
+        const bright = Math.abs(wave) > 0.75;
+        const hue = bright ? 195 : 185 + wave * 22;
+        const light = bright ? 92 : 62;
 
-      animId = requestAnimationFrame(frame);
+        ctx.strokeStyle = `hsla(${hue}, 95%, ${light}%, 0.85)`;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(pt.cx, pt.cy);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+
+        step++;
+      }
+
+      if (started && step < phase1 + phase2) {
+        animId = requestAnimationFrame(stepAnimation);
+      }
     };
 
     resize();
     window.addEventListener("resize", resize);
 
-    let current = 3;
+    let c = 3;
     setCount(3);
 
-    countdownTimer = setInterval(() => {
-      current -= 1;
-      if (current > 0) {
-        setCount(current);
+    const interval = setInterval(() => {
+      c -= 1;
+      if (c > 0) {
+        setCount(c);
       } else {
-        if (countdownTimer) clearInterval(countdownTimer);
+        clearInterval(interval);
         setCount(0);
-        startAnimation();
+        started = true;
+        animId = requestAnimationFrame(stepAnimation);
       }
     }, 1000);
 
     return () => {
-      window.removeEventListener("resize", resize);
-      if (countdownTimer) clearInterval(countdownTimer);
+      clearInterval(interval);
       cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
     };
   }, []);
 
   return (
-    <main className="relative w-full h-full flex items-center justify-center bg-[#07070c]">
+    <main className="relative w-full h-full flex items-center justify-center bg-[#06060b]">
       <canvas ref={canvasRef} className="fixed inset-0 w-full h-full block" />
-
       {count > 0 && (
-        <div
-          className="relative z-10 text-8xl font-extrabold text-[#4ade80]"
-          style={{ textShadow: "0 0 28px rgba(74, 222, 128, 0.55)" }}
-        >
+        <div className="relative z-10 text-8xl font-bold text-emerald-400">
           {count}
         </div>
       )}
-
-      <div
-        className={`fixed bottom-11 left-1/2 -translate-x-1/2 z-10 text-white/90 text-base tracking-[3px] uppercase whitespace-nowrap pointer-events-none transition-opacity duration-1000 ${
-          showMessage ? "opacity-100" : "opacity-0"
-        }`}
-        style={{ textShadow: "0 0 14px rgba(125, 211, 252, 0.45)" }}
-      >
-        Naz İçin ❤️
-      </div>
     </main>
   );
 }
